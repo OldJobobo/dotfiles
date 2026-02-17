@@ -1,0 +1,13 @@
+[Unit]
+Description=awww daemon
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/awww-daemon
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=default.target

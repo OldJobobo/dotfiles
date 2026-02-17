@@ -1,0 +1,9 @@
+[Unit]
+Description=Rotate Omarchy wallpaper via awww
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/tm-next-wallpaper-awww
+

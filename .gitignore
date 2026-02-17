@@ -1,0 +1,22 @@
+# editor / OS
+.DS_Store
+
+# shell history / secrets
+.zsh_history
+.bash_history
+
+# app caches
+.cache/
+.local/share/
+
+# backup / temp artifacts
+*.bak
+*.bak.*
+*.pre-*
+*.old
+*.orig
+*.rej
+*~
+*.swp
+*.swo
+*.tmp

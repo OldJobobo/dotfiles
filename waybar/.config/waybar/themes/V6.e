@@ -1,0 +1,1 @@
+/home/oldjobobo/Projects/waybar-themes/config/V6.e

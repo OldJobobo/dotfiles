@@ -1,0 +1,20 @@
+[preset."Frost Sentinal"]
+theme = "frost-sentinel"
+
+[preset."Frost Sentinal".waybar]
+mode = "named"
+name = "frost-sentinel"
+
+[preset."Frost Sentinal".starship]
+mode = "preset"
+preset = "bracketed-segments"
+
+[preset.wafflecat1]
+theme = "waffle-cat"
+
+[preset.wafflecat1.waybar]
+mode = "auto"
+
+[preset.wafflecat1.starship]
+mode = "preset"
+preset = "bracketed-segments"

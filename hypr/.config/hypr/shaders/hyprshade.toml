@@ -1,0 +1,5 @@
+
+[[shader]]
+name = "crt"
+apps = ["Alacritty", "kitty", "wezterm", "foot"]
+

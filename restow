@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+packages=(
+  alacritty
+  autostart
+  btop
+  cava
+  fish
+  ghostty
+  kitty
+  lazydocker
+  lazygit
+  nvim
+  starship
+  starship-themes
+  systemd
+  theme-manager
+  xdg
+)
+
+dry_run=0
+adopt=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--dry-run)
+      dry_run=1
+      shift
+      ;;
+    --adopt)
+      adopt=1
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ "$#" -gt 0 ]]; then
+  packages=("$@")
+fi
+
+stow_args=(-Rv)
+if [[ $dry_run -eq 1 ]]; then
+  stow_args=(-nvR)
+fi
+if [[ $adopt -eq 1 ]]; then
+  stow_args+=(--adopt)
+fi
+
+echo "Running: stow ${stow_args[*]} ${packages[*]}"
+stow "${stow_args[@]}" "${packages[@]}"

@@ -1,0 +1,1 @@
+/home/oldjobobo/Projects/bash/hyprscripts/toggle-gaps.sh

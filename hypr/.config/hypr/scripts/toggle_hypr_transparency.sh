@@ -1,0 +1,1 @@
+/home/oldjobobo/Projects/bash/hyprscripts/toggle_hypr_transparency.sh
