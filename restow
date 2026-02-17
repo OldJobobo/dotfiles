@@ -10,6 +10,7 @@ packages=(
   cava
   fish
   ghostty
+  hypr
   kitty
   lazydocker
   lazygit
@@ -18,6 +19,7 @@ packages=(
   starship-themes
   systemd
   theme-manager
+  waybar
   xdg
 )
 
