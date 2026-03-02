@@ -57,22 +57,8 @@ focus_scrolling_nowrap() {
   active_addr="$(hypr_json activewindow | jq -r '.address // empty')"
   clients_json="$(hypr_json clients)"
   if [[ -z "$active_addr" || -z "$clients_json" ]]; then
-    # Fallback to simple scrolling behavior.
-    if [[ "$SCROLL_ORIENTATION" == "horizontal" ]]; then
-      if [[ "$direction" == "down" ]]; then
-        hypr_dispatch layoutmsg "focus r"
-      else
-        hypr_dispatch layoutmsg "focus l"
-      fi
-    else
-      # Reversed vertical mapping per your preference:
-      # wheel down => focus up, wheel up => focus down.
-      if [[ "$direction" == "down" ]]; then
-        hypr_dispatch layoutmsg "focus u"
-      else
-        hypr_dispatch layoutmsg "focus d"
-      fi
-    fi
+    # If state is unavailable, prefer reliable window cycling over layout scroll focus.
+    cycle_windows
     return
   fi
 
@@ -103,19 +89,8 @@ focus_scrolling_nowrap() {
   done
 
   if (( idx < 0 )); then
-    if [[ "$SCROLL_ORIENTATION" == "horizontal" ]]; then
-      if [[ "$direction" == "down" ]]; then
-        hypr_dispatch layoutmsg "focus r"
-      else
-        hypr_dispatch layoutmsg "focus l"
-      fi
-    else
-      if [[ "$direction" == "down" ]]; then
-        hypr_dispatch layoutmsg "focus u"
-      else
-        hypr_dispatch layoutmsg "focus d"
-      fi
-    fi
+    # Unknown active tile in ordering: fall back to cycling to avoid visual bounce.
+    cycle_windows
     return
   fi
 
