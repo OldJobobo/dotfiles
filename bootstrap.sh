@@ -8,6 +8,26 @@ if ! command -v stow >/dev/null 2>&1; then
   exit 1
 fi
 
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+ensure_real_dir() {
+  local dir_path="$1"
+  if [[ $dry_run -eq 1 ]]; then
+    if [[ -L "$dir_path" ]]; then
+      echo "[dry-run] would replace symlink directory with real directory: $dir_path"
+    else
+      echo "[dry-run] would ensure directory exists: $dir_path"
+    fi
+    return
+  fi
+
+  if [[ -L "$dir_path" ]]; then
+    rm -f "$dir_path"
+  fi
+
+  mkdir -p "$dir_path"
+}
+
 dry_run=0
 adopt=0
 while [[ $# -gt 0 ]]; do
@@ -31,6 +51,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Keep Waybar runtime paths as real directories so theme switches do not write
+# directly into the dotfiles repository when stow is applied on a fresh system.
+ensure_real_dir "$config_home/waybar"
+ensure_real_dir "$config_home/waybar/themes"
+
 restow_args=()
 if [[ $dry_run -eq 1 ]]; then
   restow_args+=("--dry-run")
@@ -41,7 +66,6 @@ fi
 
 ./restow "${restow_args[@]}"
 
-config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
 starship_source="$config_home/starship.dhh"
 starship_target="$config_home/starship.toml"
 

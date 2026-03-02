@@ -9,7 +9,7 @@
 # starship_themes_dir = "~/.config/starship-themes"
 
 [waybar]
-# apply_mode = "symlink" # symlink|copy
+apply_mode = "symlink" # symlink|copy
 # default_mode = "auto" # auto|named|"" (empty = none)
 # default_name = ""
 
