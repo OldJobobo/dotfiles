@@ -1,21 +1,21 @@
-@import "../omarchy/current/theme/waybar.css";
+@import "../omarchy/current/theme/colors.css";
 
-/* Dracula palette */
-@define-color base #282a36;
-@define-color surface #2f3241;
-@define-color overlay #3a3d4f;
-@define-color muted #6272a4;
-@define-color subtle #a6accd;
-@define-color text #f8f8f2;
-@define-color love #ff79c6;
-@define-color gold #f1fa8c;
-@define-color rose #ffb86c;
-@define-color pine #8be9fd;
-@define-color foam #50fa7b;
-@define-color iris #bd93f9;
-@define-color highlight_low #343746;
-@define-color highlight_med #44475a;
-@define-color highlight_high #565a75;
+/* Theme palette aliases from Omarchy colors.css (generated from colors.toml) */
+@define-color base @background;
+@define-color surface @color0;
+@define-color overlay @color8;
+@define-color muted @color4;
+@define-color subtle @color7;
+@define-color text @foreground;
+@define-color love @color5;
+@define-color gold @accent;
+@define-color rose @color3;
+@define-color pine @color6;
+@define-color foam @color2;
+@define-color iris @color4;
+@define-color highlight_low @color0;
+@define-color highlight_med @color8;
+@define-color highlight_high @color7;
 
 /* --- Global-Settings ---*/
 

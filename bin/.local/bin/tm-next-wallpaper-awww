@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${TM_AWWW_DEBUG:-}" ]]; then
+  set -x
+else
+  exec >/dev/null 2>&1
+fi
+
+if [[ -n "${TM_AWWW_DEBUG:-}" && -z "${TM_AWWW_LOG:-}" ]]; then
+  TM_AWWW_LOG="$HOME/.cache/tm-next-wallpaper-awww.log"
+fi
+
+log_line() {
+  if [[ -n "${TM_AWWW_LOG:-}" ]]; then
+    printf '%s %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$*" >>"$TM_AWWW_LOG"
+  fi
+}
+
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+  XDG_RUNTIME_DIR="/run/user/$(id -u)"
+  export XDG_RUNTIME_DIR
+  log_line "set XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+fi
+
+if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+  for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+    if [[ -S "$sock" ]]; then
+      WAYLAND_DISPLAY="${sock##*/}"
+      export WAYLAND_DISPLAY
+      log_line "set WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+      break
+    fi
+  done
+fi
+
+theme_name_file="$HOME/.config/omarchy/current/theme.name"
+bg_link="$HOME/.config/omarchy/current/background"
+
+theme_name=""
+if [[ -f "$theme_name_file" ]]; then
+  theme_name="$(<"$theme_name_file")"
+  theme_name="$(echo "$theme_name" | xargs)"
+fi
+
+theme_bg_dir="$HOME/.config/omarchy/current/theme/backgrounds"
+user_bg_dir="$HOME/.config/omarchy/backgrounds/$theme_name"
+
+mapfile -d '' -t images < <(
+  find -L "$user_bg_dir" "$theme_bg_dir" -maxdepth 1 -type f \
+    \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
+    -print0 2>/dev/null | sort -z
+)
+
+if [[ ${#images[@]} -eq 0 ]]; then
+  log_line "no images found in background directories"
+  exit 1
+fi
+
+current="$(readlink -f "$bg_link" 2>/dev/null || true)"
+
+next=""
+if [[ -n "$current" ]]; then
+  for i in "${!images[@]}"; do
+    if [[ "${images[$i]}" == "$current" ]]; then
+      next="${images[$(( (i + 1) % ${#images[@]} ))]}"
+      break
+    fi
+  done
+fi
+if [[ -z "$next" ]]; then
+  next="${images[0]}"
+fi
+
+ln -sf "$next" "$bg_link"
+
+if ! command -v awww >/dev/null 2>&1; then
+  exit 1
+fi
+
+if ! command -v awww-daemon >/dev/null 2>&1; then
+  exit 1
+fi
+
+notify_awww_unavailable() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send --app-name=tm-next-wallpaper --urgency=normal \
+      "awww-daemon not available" "Transitions are disabled until it is running." \
+      >/dev/null 2>&1 || true
+  fi
+}
+
+daemon_running=0
+if command -v pgrep >/dev/null 2>&1; then
+  if pgrep -x awww-daemon >/dev/null 2>&1; then
+    daemon_running=1
+  fi
+fi
+
+if [[ $daemon_running -eq 0 ]]; then
+  log_line "awww-daemon not running; skipping transition"
+  notify_awww_unavailable
+  exit 0
+fi
+
+if command -v pkill >/dev/null 2>&1; then
+  pkill -x swaybg >/dev/null 2>&1 || true
+fi
+
+run_awww() {
+  local -a cmd=(
+    awww img "$next" --transition-type grow --transition-duration 2.4 --transition-fps 60
+    --transition-pos center --transition-bezier .42,0,.2,1 --transition-wave 28,12
+  )
+  if [[ -n "${TM_AWWW_NAMESPACE:-}" ]]; then
+    cmd+=(--namespace "$TM_AWWW_NAMESPACE")
+  fi
+  "${cmd[@]}"
+}
+
+
+# Grow preset (current default)
+if [[ $- == *x* ]]; then
+  set +x
+  xtrace_was_on=1
+else
+  xtrace_was_on=0
+fi
+
+if ! output="$(run_awww 2>&1)"; then
+  if [[ -n "$output" ]]; then
+    log_line "awww img failed: $output"
+  else
+    log_line "awww img failed; skipping transition"
+  fi
+  notify_awww_unavailable
+fi
+
+if [[ $xtrace_was_on -eq 1 ]]; then
+  set -x
+fi
+
+# Cinematic drift (wave) preset:
+# awww img "$next" --transition-type wave --transition-duration 2.6 --transition-fps 60 \
+#   --transition-angle 35 --transition-pos center --transition-bezier .42,0,.2,1 --transition-wave 28,12
+
+# Classic wipe preset:
+# awww img "$next" --transition-type wipe --transition-duration 2.0 --transition-fps 60 \
+#   --transition-angle 45 --transition-pos center --transition-bezier .54,0,.34,.99 --transition-wave 20,20

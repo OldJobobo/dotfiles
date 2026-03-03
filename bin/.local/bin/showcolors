@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+colors_file="${PWD}/colors.toml"
+
+if [[ ! -f "$colors_file" ]]; then
+  exit 0
+fi
+
+COLORS_FILE="$colors_file" python - <<'PY'
+from __future__ import annotations
+
+from pathlib import Path
+import os
+import shutil
+import tomllib
+
+colors_file = Path(os.environ["COLORS_FILE"])
+
+def load_colors(path: Path) -> dict[str, str]:
+    # Parse TOML so comment lines/blocks are ignored correctly.
+    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    data: dict[str, str] = {}
+    for key, value in raw.items():
+        if isinstance(value, str):
+            data[key] = value
+    return data
+
+def hex_to_rgb(value: str) -> tuple[int, int, int]:
+    value = value.lstrip("#")
+    if len(value) != 6:
+        raise ValueError(f"Invalid hex color: {value}")
+    return int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+
+def fg_for_bg(r: int, g: int, b: int) -> str:
+    # Relative luminance check for readable text.
+    luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+    return "0;0;0" if luminance > 0.6 else "255;255;255"
+
+def color_cell(text: str, hex_value: str, width: int = 10) -> str:
+    r, g, b = hex_to_rgb(hex_value)
+    fg = fg_for_bg(r, g, b)
+    bg = f"\x1b[48;2;{r};{g};{b}m"
+    fg_code = f"\x1b[38;2;{fg}m"
+    reset = "\x1b[0m"
+    padded = text.ljust(width)
+    return f"{bg}{fg_code}{padded}{reset}"
+
+def top_cell(hex_value: str, width: int = 10) -> str:
+    r, g, b = hex_to_rgb(hex_value)
+    bg = f"\x1b[48;2;{r};{g};{b}m"
+    fg = "\x1b[38;2;255;255;255m"
+    reset = "\x1b[0m"
+    padded = " " * width
+    return f"{bg}{fg}{padded}{reset}"
+
+def max_columns(cell_width: int, max_cols: int = 8, min_cols: int = 4) -> int:
+    term_width = shutil.get_terminal_size((96, 20)).columns
+    cols = max(1, (term_width + 1) // (cell_width + 1))
+    return max(min_cols, min(max_cols, cols))
+
+def render_grid(items: list[tuple[str, str]], colors: dict[str, str], title: str, columns: int | None = None) -> None:
+    if columns is None:
+        columns = max_columns(10)
+    print(title)
+    row_tops: list[str] = []
+    row_labels: list[str] = []
+    row_values: list[str] = []
+    for index, (label, key) in enumerate(items, start=1):
+        value = colors[key]
+        row_tops.append(top_cell(value))
+        row_labels.append(color_cell(label, value))
+        row_values.append(color_cell(value, value))
+        if index % columns == 0:
+            print(" ".join(row_tops))
+            print(" ".join(row_labels))
+            print(" ".join(row_values))
+            print("")
+            row_tops = []
+            row_labels = []
+            row_values = []
+    if row_labels:
+        print(" ".join(row_tops))
+        print(" ".join(row_labels))
+        print(" ".join(row_values))
+        print("")
+
+colors = load_colors(colors_file)
+ui_items = [
+    ("fg", "foreground"),
+    ("sel_fg", "selection_foreground"),
+    ("cursor", "cursor"),
+    ("bg", "background"),
+    ("sel_bg", "selection_background"),
+    ("accent", "accent"),
+]
+color_items = [(f"color{index}", f"color{index}") for index in range(16)]
+missing = [key for _, key in ui_items + color_items if key not in colors]
+if missing:
+    raise SystemExit(f"Missing color keys in {colors_file}: {', '.join(missing)}")
+
+print(f"palette: {colors_file}")
+print("")
+render_grid(ui_items, colors, "ui colors:", columns=3)
+render_grid(color_items, colors, "colors.toml:")
+PY

@@ -6,6 +6,7 @@ cd "$(dirname "$0")"
 packages=(
   alacritty
   autostart
+  bin
   btop
   cava
   fish
