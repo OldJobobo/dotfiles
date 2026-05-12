@@ -52,6 +52,7 @@ x-scheme-handler/snews=userapp-Thunderbird-BGZYF3.desktop
 x-scheme-handler/nntp=userapp-Thunderbird-BGZYF3.desktop
 x-scheme-handler/aether=aether-protocol-handler.desktop
 x-scheme-handler/discord=vesktop.desktop
+x-scheme-handler/claude-cli=claude-code-url-handler.desktop
 
 [Added Associations]
 application/json=nvim.desktop;

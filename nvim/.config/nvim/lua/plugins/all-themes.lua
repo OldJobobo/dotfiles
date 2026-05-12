@@ -18,6 +18,7 @@ local themes = {
   {
     "OldJobobo/retro-82.nvim",
     name = "retro-82",
+    branch = "dev",
   },
   {
     "OldJobobo/biscuit-nvim",
@@ -375,7 +376,7 @@ local themes = {
     name = "waffle-cat",
   },
   {
-    "xero/miasma.nvim",
+    "OldJobobo/miasma.nvim",
   },
   {
     "xero/evangelion.nvim",

@@ -1,13 +1,16 @@
 [Unit]
 Description=awww daemon
 After=graphical-session.target
+PartOf=graphical-session.target
 
 [Service]
+Type=simple
 ExecStart=/usr/bin/awww-daemon
 Environment=WAYLAND_DISPLAY=wayland-1
 Environment=XDG_RUNTIME_DIR=/run/user/%U
+ExecStartPre=/usr/bin/bash -lc 'for i in {1..50}; do [ -S "%t/${WAYLAND_DISPLAY}" ] && exit 0; sleep 0.2; done; echo "awww-daemon: missing Wayland socket %t/${WAYLAND_DISPLAY}" >&2; exit 1'
 Restart=always
 RestartSec=1
 
 [Install]
-WantedBy=default.target
+WantedBy=graphical-session.target

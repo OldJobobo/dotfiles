@@ -15,9 +15,8 @@ fi
 pkill slurp && exit 0
 
 SCREENSHOT_EDITOR="${OMARCHY_SCREENSHOT_EDITOR:-satty}"
-# Wait briefly after selection so transient layer updates don't get captured.
-# Set OMARCHY_SCREENSHOT_STABILIZE_MS=0 to disable.
-STABILIZE_MS="${OMARCHY_SCREENSHOT_STABILIZE_MS:-140}"
+UNFREEZE_MS="${OMARCHY_SCREENSHOT_UNFREEZE_MS:-120}"
+WAYFREEZE_PID=""
 
 # Parse --editor flag from any position
 ARGS=()
@@ -43,6 +42,24 @@ open_editor() {
   fi
 }
 
+start_freeze() {
+  wayfreeze --hide-cursor >/dev/null 2>&1 &
+  WAYFREEZE_PID=$!
+  sleep 0.05
+}
+
+stop_freeze() {
+  [[ -n $WAYFREEZE_PID ]] || return 0
+
+  if [[ $UNFREEZE_MS =~ ^[0-9]+$ ]] && ((UNFREEZE_MS > 0)); then
+    sleep "0.$(printf '%03d' "$UNFREEZE_MS")"
+  fi
+
+  kill "$WAYFREEZE_PID" 2>/dev/null || true
+  wait "$WAYFREEZE_PID" 2>/dev/null || true
+  WAYFREEZE_PID=""
+}
+
 MODE="${1:-smart}"
 PROCESSING="${2:-slurp}"
 
@@ -66,29 +83,26 @@ get_rectangles() {
   hyprctl clients -j | jq -r --arg ws "$active_workspace" '.[] | select(.workspace.id == ($ws | tonumber)) | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"'
 }
 
+trap stop_freeze EXIT
+
 # Select based on mode
 case "$MODE" in
   region)
-    hyprpicker -r -z >/dev/null 2>&1 & PID=$!
-    sleep .1
+    start_freeze
     SELECTION=$(slurp 2>/dev/null)
-    kill $PID 2>/dev/null
     ;;
   windows)
-    hyprpicker -r -z >/dev/null 2>&1 & PID=$!
-    sleep .1
+    start_freeze
     SELECTION=$(get_rectangles | slurp -r 2>/dev/null)
-    kill $PID 2>/dev/null
     ;;
   fullscreen)
+    start_freeze
     SELECTION=$(hyprctl monitors -j | jq -r "${JQ_MONITOR_GEO} .[] | select(.focused == true) | format_geo")
     ;;
   smart|*)
     RECTS=$(get_rectangles)
-    hyprpicker -r -z >/dev/null 2>&1 & PID=$!
-    sleep .1
+    start_freeze
     SELECTION=$(echo "$RECTS" | slurp 2>/dev/null)
-    kill $PID 2>/dev/null
 
   # If the selection area is L * W < 20, we'll assume you were trying to select whichever
   # window or output it was inside of to prevent accidental 2px snapshots
@@ -116,10 +130,6 @@ case "$MODE" in
 esac
 
 [[ -z $SELECTION ]] && exit 0
-
-if [[ $STABILIZE_MS =~ ^[0-9]+$ ]] && ((STABILIZE_MS > 0)); then
-  sleep "0.$(printf '%03d' "$STABILIZE_MS")"
-fi
 
 FILENAME="screenshot-$(date +'%Y-%m-%d_%H-%M-%S').png"
 FILEPATH="$OUTPUT_DIR/$FILENAME"

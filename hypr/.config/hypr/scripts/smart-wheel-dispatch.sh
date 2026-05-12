@@ -7,7 +7,8 @@ if [[ "$direction" != "up" && "$direction" != "down" ]]; then
 fi
 
 HYPRCTL_INSTANCE=()
-SCROLL_ORIENTATION="vertical"
+SCROLL_ORIENTATION="auto"
+HYPR_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hyprland.conf"
 
 init_hypr_instance() {
   local out sig_path sig dir
@@ -42,6 +43,71 @@ hypr_dispatch() {
   hyprctl "${HYPRCTL_INSTANCE[@]}" dispatch "$@" >/dev/null 2>&1 || true
 }
 
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+normalize_workspace_name() {
+  local value
+  value="$(trim "$1")"
+  value="${value#name:}"
+  printf '%s' "$value"
+}
+
+detect_scroll_orientation() {
+  local target_id target_name line body part workspace_token direction
+  local -a parts
+
+  [[ -r "$HYPR_CONFIG" ]] || return 1
+
+  target_id="$(trim "$ws_id")"
+  target_name="$(normalize_workspace_name "$ws_name")"
+
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    [[ "$line" =~ ^[[:space:]]*workspace[[:space:]]*= ]] || continue
+    [[ "$line" == *"layout:scrolling"* ]] || continue
+
+    body="${line#*=}"
+    IFS=',' read -r -a parts <<<"$body"
+
+    workspace_token=""
+    direction=""
+    for part in "${parts[@]}"; do
+      part="$(trim "$part")"
+      case "$part" in
+        name:*)
+          workspace_token="$(normalize_workspace_name "$part")"
+          ;;
+        layoutopt:direction:*)
+          direction="${part#layoutopt:direction:}"
+          ;;
+      esac
+    done
+
+    [[ -n "$workspace_token" && -n "$direction" ]] || continue
+    if [[ "$workspace_token" != "$target_id" && "$workspace_token" != "$target_name" ]]; then
+      continue
+    fi
+
+    case "$direction" in
+      left|right)
+        printf 'horizontal\n'
+        return 0
+        ;;
+      up|down)
+        printf 'vertical\n'
+        return 0
+        ;;
+    esac
+  done < "$HYPR_CONFIG"
+
+  return 1
+}
+
 cycle_windows() {
   if [[ "$direction" == "down" ]]; then
     hypr_dispatch cyclenext
@@ -51,8 +117,9 @@ cycle_windows() {
 }
 
 focus_scrolling_nowrap() {
-  local active_addr clients_json idx count target
-  local -a ordered_addrs
+  local active_addr clients_json idx count next_idx target_addr
+  local row x y addr min_x max_x min_y max_y
+  local -a client_rows ordered_addrs
 
   active_addr="$(hypr_json activewindow | jq -r '.address // empty')"
   clients_json="$(hypr_json clients)"
@@ -62,23 +129,54 @@ focus_scrolling_nowrap() {
     return
   fi
 
-  mapfile -t ordered_addrs < <(
+  mapfile -t client_rows < <(
     jq -r --argjson ws "$ws_id" '
       .[]
       | select(.workspace.id == $ws)
       | select((.floating // false) | not)
       | select((.hidden // false) | not)
       | select((.mapped // true) == true)
-      | "\(.at[1])\t\(.at[0])\t\(.address)"
+      | "\(.at[0])\t\(.at[1])\t\(.address)"
     ' <<<"$clients_json" \
-    | if [[ "$SCROLL_ORIENTATION" == "horizontal" ]]; then sort -n -k2,2 -k1,1; else sort -n -k1,1 -k2,2; fi \
-    | awk '{print $3}'
   )
 
-  count="${#ordered_addrs[@]}"
+  count="${#client_rows[@]}"
   if (( count < 2 )); then
     return
   fi
+
+  if [[ "$SCROLL_ORIENTATION" != "horizontal" && "$SCROLL_ORIENTATION" != "vertical" ]]; then
+    min_x=
+    max_x=
+    min_y=
+    max_y=
+
+    for row in "${client_rows[@]}"; do
+      IFS=$'\t' read -r x y addr <<<"$row"
+
+      [[ -n "$min_x" ]] || min_x="$x"
+      [[ -n "$max_x" ]] || max_x="$x"
+      [[ -n "$min_y" ]] || min_y="$y"
+      [[ -n "$max_y" ]] || max_y="$y"
+
+      (( x < min_x )) && min_x="$x"
+      (( x > max_x )) && max_x="$x"
+      (( y < min_y )) && min_y="$y"
+      (( y > max_y )) && max_y="$y"
+    done
+
+    if (( (max_x - min_x) >= (max_y - min_y) )); then
+      SCROLL_ORIENTATION="horizontal"
+    else
+      SCROLL_ORIENTATION="vertical"
+    fi
+  fi
+
+  mapfile -t ordered_addrs < <(
+    printf '%s\n' "${client_rows[@]}" \
+    | if [[ "$SCROLL_ORIENTATION" == "horizontal" ]]; then sort -n -k1,1 -k2,2; else sort -n -k2,2 -k1,1; fi \
+    | awk -F '\t' '{print $3}'
+  )
 
   idx=-1
   for i in "${!ordered_addrs[@]}"; do
@@ -94,29 +192,18 @@ focus_scrolling_nowrap() {
     return
   fi
 
-  if [[ "$SCROLL_ORIENTATION" == "horizontal" ]]; then
-    # Horizontal mapping:
-    # wheel down => focus left, wheel up => focus right.
-    if [[ "$direction" == "down" ]]; then
-      target="l"
-      (( idx == 0 )) && return
-    else
-      target="r"
-      (( idx == count - 1 )) && return
-    fi
+  if [[ "$direction" == "down" ]]; then
+    (( idx == 0 )) && return
+    next_idx=$((idx - 1))
   else
-    # Reversed vertical mapping:
-    # wheel down => focus up, wheel up => focus down.
-    if [[ "$direction" == "down" ]]; then
-      target="u"
-      (( idx == 0 )) && return
-    else
-      target="d"
-      (( idx == count - 1 )) && return
-    fi
+    (( idx == count - 1 )) && return
+    next_idx=$((idx + 1))
   fi
 
-  hypr_dispatch layoutmsg "focus $target"
+  target_addr="${ordered_addrs[$next_idx]:-}"
+  [[ -n "$target_addr" ]] || return
+
+  hypr_dispatch focuswindow "address:$target_addr"
 }
 
 if ! init_hypr_instance; then
@@ -136,11 +223,7 @@ ws_name="$(jq -r '.name // empty' <<<"$ws_json")"
 
 # On scrolling workspaces, use no-wrap directional focus.
 if [[ "$layout" == scrolling* ]]; then
-  if [[ "$ws_id" =~ ^[3-6]$ || "$ws_name" =~ ^[3-6]$ || "$ws_name" =~ ^name:[3-6]$ ]]; then
-    SCROLL_ORIENTATION="horizontal"
-  else
-    SCROLL_ORIENTATION="vertical"
-  fi
+  SCROLL_ORIENTATION="$(detect_scroll_orientation || printf 'auto\n')"
   focus_scrolling_nowrap
 else
   cycle_windows
